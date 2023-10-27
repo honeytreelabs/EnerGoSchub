@@ -21,6 +21,6 @@
 go.work
 
 # Project specific files
-/energotritt
+/energoschub
 /scan
 /gui

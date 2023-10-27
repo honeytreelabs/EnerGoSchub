@@ -1,4 +1,4 @@
-module honeytreelabs.com/EnerGoTritt
+module honeytreelabs.com/EnerGoSchub
 
 go 1.21.3
 
