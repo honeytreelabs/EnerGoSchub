@@ -228,6 +228,11 @@ type Device1Properties struct {
 				host from system suspend.
 	*/
 	WakeAllowed bool
+
+	/*
+	    TBD
+	*/
+	Bonded bool
 }
 
 //Lock access to properties
