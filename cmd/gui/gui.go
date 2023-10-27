@@ -1,58 +1,97 @@
 package main
 
 import (
+	"fmt"
+
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"tinygo.org/x/bluetooth"
 )
 
 func main() {
-	newPrimitive := func(text string) tview.Primitive {
-		return tview.NewTextView().
-			SetTextAlign(tview.AlignCenter).
-			SetText(text)
-	}
+	sideBar := tview.NewTextView().
+		SetTextAlign(tview.AlignCenter).
+		SetText("Control")
 	adapter := bluetooth.DefaultAdapter
 	adapter.Enable()
+	scanRunning := false
 	app := tview.NewApplication()
 	grid := tview.NewGrid().SetBorders(true)
-	macsView := newPrimitive("Menu")
-	sideBar := newPrimitive("Side Bar")
+	actionView := tview.NewList()
+	scanResultsView := tview.NewTable().SetBorders(true).SetSelectable(true, false).SetSelectedFunc(func(row, column int) {
+		app.SetFocus(actionView)
+	})
 
-	var macs map[string]struct{}
-	list := tview.NewList()
-	list.
-		AddItem("Start scan", "Selecting this starts a scan", 's', func() {
-			macs = make(map[string]struct{})
-			textView := macsView.(*tview.TextView)
-			textView.SetText("")
-			go adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
-				macs[device.Address.String()] = struct{}{}
-			})
-		}).
+	macs := NewMacStorage()
+	actionView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTAB:
+			app.SetFocus(scanResultsView)
+			return nil
+		}
+		return event
+	})
+	scanResultsView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTAB:
+			app.SetFocus(actionView)
+			return nil
+		}
+		switch string(event.Rune()) {
+		case "q":
+			fallthrough
+		case "Q":
+			app.Stop()
+			return nil
+		}
+		return event
+	})
+
+	startScan := func() {
+		if scanRunning {
+			return
+		}
+		scanRunning = true
+
+		macs.Clear()
+		go adapter.Scan(func(adapter *bluetooth.Adapter, device bluetooth.ScanResult) {
+			macs.Add(device)
+
+			scanResultsView.Clear()
+			for i, scanResult := range macs.GetAll(nil) {
+				scanResultsView.SetCell(i, 0, tview.
+					NewTableCell(fmt.Sprintf("%s @ %d", scanResult.Address.String(), scanResult.RSSI)).
+					SetTextColor(tcell.ColorWhite).
+					SetAlign(tview.AlignCenter).
+					SetExpansion(1))
+			}
+			app.Draw()
+		})
+	}
+
+	actionView.
+		AddItem("Start scan", "Selecting this starts a scan", 's', startScan).
 		AddItem("Stop scan", "Selecting this stops the scan", 't', func() {
 			adapter.StopScan()
-			text := ""
-			textView := macsView.(*tview.TextView)
-			for mac := range macs {
-				text = mac + "\n" + text
-			}
-			textView.SetText(text)
+			scanRunning = false
 		}).
 		AddItem("Quit", "Press to exit", 'q', func() {
 			app.Stop()
 		})
 
 	// Layout for screens narrower than 100 cells (menu and side bar are hidden).
-	grid.AddItem(list /*     */, 0, 0, 1, 1, 0, 0, false).
-		AddItem(macsView /*  */, 1, 0, 1, 1, 0, 0, false).
-		AddItem(sideBar /*   */, 2, 0, 1, 1, 0, 0, false)
+	grid.AddItem(actionView /*        */, 0, 0, 1, 1, 0, 0, false).
+		AddItem(scanResultsView /*    */, 1, 0, 1, 1, 0, 0, false).
+		AddItem(sideBar /*            */, 2, 0, 1, 1, 0, 0, false)
 
 	// Layout for screens wider than 100 cells.
-	grid.AddItem(list /*     */, 0, 0, 1, 1, 0, 150, false).
-		AddItem(macsView /*  */, 0, 1, 1, 1, 0, 150, false).
-		AddItem(sideBar /*   */, 0, 2, 1, 1, 0, 150, false)
+	grid.AddItem(actionView /*        */, 0, 0, 1, 1, 0, 150, false).
+		AddItem(scanResultsView /*    */, 0, 1, 1, 1, 0, 150, false).
+		AddItem(sideBar /*            */, 0, 2, 1, 1, 0, 150, false)
 
-	if err := app.SetRoot(grid, true).SetFocus(list).Run(); err != nil {
+	app.SetRoot(grid, true).SetFocus(actionView)
+	startScan()
+	if err := app.Run(); err != nil {
 		panic(err)
 	}
 }
