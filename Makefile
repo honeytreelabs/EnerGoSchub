@@ -1,4 +1,4 @@
-all: energotritt scan
+all: energotritt scan gui
 
 energotritt: cmd/energotritt/energotritt.go
 	go build $<
@@ -6,9 +6,12 @@ energotritt: cmd/energotritt/energotritt.go
 scan: cmd/scan/scan.go
 	go build $<
 
+gui: cmd/gui/gui.go
+	go build $<
+
 playground: cmd/playground/playground.go
 	go build $<
 
 .PHONY: clean
 clean:
-	-rm energotritt scan
+	-rm energotritt scan gui
